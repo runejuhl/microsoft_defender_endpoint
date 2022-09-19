@@ -1,0 +1,12 @@
+---
+# tasks file for atea.service.microsoft_defender_endpoint
+- ansible.builtin.include_tasks:
+    file: assert.yml
+- ansible.builtin.include_tasks:
+    file: repos.yml
+- ansible.builtin.include_tasks:
+    file: install.yml
+- ansible.builtin.include_tasks:
+    file: config.yml
+- ansible.builtin.include_tasks:
+    file: service.yml

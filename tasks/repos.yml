@@ -1,0 +1,81 @@
+---
+- name: install repository on Red Hat-based distributions
+  block:
+    - name: add gpg key (rpm)
+      ansible.builtin.rpm_key:
+        key: "{{ elastic_repo_gpg_url }}"
+        state: present
+
+    - name: add yum repository
+      ansible.builtin.yum_repository:
+        name: '{{ microsoft_repo_name }}'
+        description: 'Microsoft MDE package repo ({{ microsoft_repo_channel }})'
+        baseurl: "{{ microsoft_rpm_repo }}"
+        gpgkey: "{{ microsoft_rpm_gpgkey }}"
+  when:
+    - ansible_pkg_mgr in [ "dnf", "rpm", "yum" ]
+
+- name: install repository on Debian-based distributions
+  block:
+    - name: install apt key on newer Debian-based distributions
+      block:
+        - name: ensure apt-transport-https is installed
+          ansible.builtin.package:
+            name: apt-transport-https
+            state: present
+
+        - name: fetch apt gpg key
+          ansible.builtin.uri:
+            url: '{{ microsoft_apt_key_url }}'
+            dest: '{{ microsoft_apt_key_path }}'
+            creates: '{{ microsoft_apt_key_path }}'
+          register: fetch_gpg
+
+        - name: dearmor gpg key
+          ansible.builtin.shell:
+            cmd: |
+              tmp=$(mktemp)
+              mv '{{ microsoft_apt_key_path }}' "${tmp}"
+              gpg --dearmor < "${tmp}" > '{{ microsoft_apt_key_path }}'
+              rm -f "${tmp}"
+          when:
+            - fetch_gpg.changed and fetch_gpg.status == 200
+
+      when:
+        - '_microsoft_apt_distro_uses_signed_by'
+
+    - name: install apt key on older Debian-based distributions
+      block:
+        - name: ensure apt-transport-https is installed
+          ansible.builtin.package:
+            name: apt-transport-https
+            state: present
+
+        - name: install apt gpg key
+          ansible.builtin.apt_key:
+            url: '{{ microsoft_apt_key_url }}'
+
+      when:
+        - 'not _microsoft_apt_distro_uses_signed_by'
+
+    # Ansible's apt_repository plugin won't remove lines, which means that an
+    # upgraded OS might have duplicate entries in the same file, which causes
+    # apt to fail. Better to explicitly remove them if not used.
+    - name: configure apt repository
+      block:
+        - name: configure apt repository (using signed-by)
+          ansible.builtin.apt_repository:
+            filename: '{{ microsoft_repo_name }}'
+            state: '{{ _microsoft_apt_distro_uses_signed_by | bool | ternary("present", "absent") }}'
+            repo: |
+              deb [signed-by={{ microsoft_apt_key_path }}] {{ microsoft_apt_repo }} {{ ansible_facts['lsb']['codename'] }} main
+
+        - name: configure apt repository (using deprecated apt-key)
+          ansible.builtin.apt_repository:
+            filename: '{{ microsoft_repo_name }}'
+            state: '{{ _microsoft_apt_distro_uses_signed_by | bool | ternary("absent", "present") }}'
+            repo: |
+              deb {{ microsoft_apt_repo }} {{ ansible_facts['lsb']['codename'] }} main
+
+  when:
+    - ansible_pkg_mgr == 'apt'

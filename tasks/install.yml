@@ -1,0 +1,5 @@
+---
+- name: install mdatp package
+  ansible.builtin.package:
+    name: mdatp
+    state: '{{ mde_version | default(false) | bool | ternary("latest", "present") }}'

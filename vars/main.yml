@@ -1,0 +1,78 @@
+---
+# vars file for atea.service.microsoft_defender_endpoint
+
+microsoft_repo_channel: prod
+
+microsoft_repo_name: 'microsoft-mde'
+
+_microsoft_rpm_repo:
+  '7': 'https://packages.microsoft.com/rhel/7.2/{{ microsoft_repo_channel }}/'
+  '8': 'https://packages.microsoft.com/rhel/8/{{ microsoft_repo_channel }}/'
+
+microsoft_rpm_repo: "{{ _microsoft_rpm_repo['distribution_major_version'] }}"
+microsoft_rpm_gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+
+_microsoft_apt_distribution: "{{ ansible_facts['distribution'] | lower() }}"
+_microsoft_apt_repo_version:
+  ubuntu: "{{ ansible_facts['distribution_version'] }}"
+  debian: "{{ ansible_facts['distribution_major_version'] }}"
+
+# variable used to determine if we should used the signed-by feature of apt
+_microsoft_apt_distro_uses_signed_by: |
+  {{
+    ansible_facts['distribution'] == 'Ubuntu' and (ansible_facts['distribution_major_version'] | int) >= 22
+      or
+    ansible_facts['distribution'] == 'Debian' and (ansible_facts['distribution_major_version'] | int) >= 12
+  }}
+
+microsoft_apt_repo: "https://packages.microsoft.com/{{ _microsoft_apt_distribution }}/{{ _microsoft_apt_repo_version[_microsoft_apt_distribution] }}/{{ microsoft_repo_channel }}"
+microsoft_apt_key_url: https://packages.microsoft.com/keys/microsoft.asc
+microsoft_apt_key_path: /usr/share/keyrings/microsoft-mde.gpg
+
+microsoft_mde_config_default:
+  antivirusEngine:
+    enforcementLevel: 'real_time'
+    scanAfterDefinitionUpdate: true
+    scanArchives: true
+    maximumOnDemandScanThreads: 2
+    exclusionsMergePolicy: 'merge'
+    exclusions: []
+      # - '$type': 'excludedPath'
+      #   'isDirectory': false
+      #   'path': '/var/log/system.log'
+      # - '$type': 'excludedPath'
+      #   'isDirectory': true
+      #   'path': '/run'
+      # - '$type': 'excludedPath'
+      #   'isDirectory': true
+      #   'path': '/home/*/git'
+      # - '$type': 'excludedFileExtension'
+      #   'extension': '.pdf'
+      # - '$type': 'excludedFileName'
+      #   'name': 'cat'
+    allowedThreats: []
+      # - 'EICAR-Test-File (not a virus)'
+    disallowedThreatActions:
+      - 'allow'
+      - 'restore'
+    threatTypeSettingsMergePolicy: 'merge'
+    threatTypeSettings:
+      - 'key': 'potentially_unwanted_application'
+        'value': 'block'
+      - 'key': 'archive_bomb'
+        'value': 'audit'
+    scanResultsRetentionDays: '90'
+
+  cloudService:
+    enabled: true
+    diagnosticLevel: 'optional'
+    automaticSampleSubmissionConsent: 'safe'
+    automaticDefinitionUpdateEnabled: true
+    proxy: null
+
+microsoft_mde_config: |
+  {{
+    microsoft_mde_config_default
+    | combine(microsoft_mde_config_custom
+      | default({}), recursive=True)
+  }}

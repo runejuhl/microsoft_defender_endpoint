@@ -1,0 +1,64 @@
+---
+- name: configure mdatp
+  block:
+    - name: create directories
+      ansible.builtin.file:
+        path: /etc/opt/microsoft/mdatp/
+        state: directory
+        recurse: true
+        mode: 'a=rX,ug+w'
+
+    - name: check if mdatp is already onboarded
+      ansible.builtin.command:
+        cmd: mdatp health --field licensed
+      register: mdatp_health_licensed
+      retries: 10
+      delay: 1
+      until: mdatp_health_licensed.rc == 0
+      changed_when: false
+
+    - name: create onboarding json file
+      ansible.builtin.copy:
+        dest: '/etc/opt/microsoft/mdatp/mdatp_onboard.json'
+        content: '{{ microsoft_mde_onboarding_blob | to_nice_json(indent=2) }}'
+        mode: 'o='
+      notify: 'restart mdatp'
+      when:
+        - mdatp_health_licensed.stdout != 'true'
+
+    - name: remove onboarding file if already onboarded
+      ansible.builtin.file:
+        path: '/etc/opt/microsoft/mdatp/mdatp_onboard.json'
+        state: 'absent'
+      when:
+        - mdatp_health_licensed.stdout == 'true'
+
+- name: configure mdatp
+  block:
+    - name: create directories
+      ansible.builtin.file:
+        path: /etc/opt/microsoft/mdatp/
+        state: directory
+        recurse: true
+        mode: 'a=rX,ug+w'
+
+    - name: create mdatp managed config
+      ansible.builtin.copy:
+        dest: '/etc/opt/microsoft/mdatp/managed/mdatp_managed.json'
+        content: |-
+          {{
+            microsoft_mde_config | to_nice_json(indent=2)
+          }}
+      diff: true
+      register: mdatp_config_diff
+
+    # Contrary to MDE documentation it seems that the mdatp service needs to be
+    # restarted if proxy changes.
+    - name: restart mdatp if proxy changed
+      assert: {that: true, quiet: true}
+      changed_when: true
+      when:
+        - 'mdatp_config_diff.changed'
+        - |
+            (mdatp_config_diff.diff[0].before | from_json).cloudService.proxy != (mdatp_config_diff.diff[0].after | from_json).cloudService.proxy
+      notify: 'restart mdatp'

@@ -1,0 +1,7 @@
+---
+- name: test if onboarding config is set
+  ansible.builtin.assert:
+    that:
+      - "microsoft_mde_onboarding_blob is defined"
+      - "'onboardingInfo' in microsoft_mde_onboarding_blob"
+    quiet: true

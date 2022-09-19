@@ -1,0 +1,6 @@
+---
+# handlers file for atea.service.microsoft_defender_endpoint
+- name: restart mdatp
+  ansible.builtin.service:
+    name: mdatp
+    state: restarted

@@ -1,0 +1,5 @@
+---
+- name: manage mdatp service
+  ansible.builtin.service:
+    name: 'mdatp'
+    state: 'started'
